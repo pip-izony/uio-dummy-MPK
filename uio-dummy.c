@@ -99,9 +99,9 @@
 #define PROT_NONE        0x0                /* Page can not be accessed.  */
 
 struct pkey_entry {
-	pid_t pid;
-	unsigned long permission;
-	struct list_head list;
+    pid_t pid;
+    unsigned long permission;
+    struct list_head list;
 };
 static LIST_HEAD(pkey_list);
 static unsigned long current_permission = -1;
@@ -118,7 +118,7 @@ static inline phys_addr_t page_to_phys(const struct page *page) {
 }
 
 static struct pkey_entry *find_pkey(pid_t pid) {
-	struct pkey_entry *entry;
+    struct pkey_entry *entry;
 
     list_for_each_entry(entry, &pkey_list, list) {
         if (entry->pid == pid)
@@ -128,11 +128,11 @@ static struct pkey_entry *find_pkey(pid_t pid) {
 }
 
 void print_pkey(void) {
-	struct pkey_entry *entry;
+    struct pkey_entry *entry;
 
     list_for_each_entry(entry, &pkey_list, list) {
-		printk(KERN_INFO "[uio-dummy] pid : %d\n", entry->pid);
-	}
+        printk(KERN_INFO "[uio-dummy] pid : %d\n", entry->pid);
+    }
 }
 
 void free_pkey(pid_t pid) {
@@ -142,242 +142,244 @@ void free_pkey(pid_t pid) {
 
     list_for_each_entry_safe(entry, tmp, &pkey_list, list) {
         if (entry->pid == pid) {
-			memset(&info, 0, sizeof(info));
-			info.si_signo = SIGSEGV;
-			info.si_int = -1;
+        memset(&info, 0, sizeof(info));
+        info.si_signo = SIGSEGV;
+        info.si_int = -1;
             task = pid_task(find_vpid(pid), PIDTYPE_PID);
             if (task)
                 send_sig_info(SIGSEGV, &info, task);
             list_del(&entry->list);
-			kfree(entry);
+        kfree(entry);
         }
     }
 }
 
 void free_all_pkeys(void) {
     struct pkey_entry *entry, *tmp;
-	struct task_struct *task;
+    struct task_struct *task;
 
-	print_pkey();
+    print_pkey();
 
     list_for_each_entry_safe(entry, tmp, &pkey_list, list) {
-		struct kernel_siginfo info;
+        struct kernel_siginfo info;
 
-		memset(&info, 0, sizeof(info));
-		info.si_signo = SIGSEGV;
-		info.si_int = -1;
-		task = pid_task(find_vpid(entry->pid), PIDTYPE_PID);
-		if (task)
-			send_sig_info(SIGSEGV, &info, task);
+        memset(&info, 0, sizeof(info));
+        info.si_signo = SIGSEGV;
+        info.si_int = -1;
+        task = pid_task(find_vpid(entry->pid), PIDTYPE_PID);
+        if (task)
+            send_sig_info(SIGSEGV, &info, task);
         list_del(&entry->list);
-		kfree(entry);
+        kfree(entry);
     }
 }
 
 static int uio_dummy_mmap(struct uio_info *info, struct vm_area_struct *vma) {
-	pid_t current_pid = task_pid_nr(current);
-	struct pkey_entry *entry;
-	struct uio_mem *mem = &info->mem[0];
+    pid_t current_pid = task_pid_nr(current);
+    struct pkey_entry *entry;
+    struct uio_mem *mem = &info->mem[0];
     unsigned long pfn = mem->addr >> PAGE_SHIFT;
     unsigned long size = vma->vm_end - vma->vm_start;
-	unsigned long permission = 0;
+    unsigned long permission = 0;
 
     if (size > mem->size)
         return -EINVAL;
 
-	if (vma->vm_flags & VM_READ) {
-    	permission = PROT_READ;
-	}
+    if (vma->vm_flags & VM_READ) {
+        permission = PROT_READ;
+    }
 
-	if (vma->vm_flags & VM_WRITE) {
-    	permission |= PROT_WRITE;
-	}
-	
-	entry = find_pkey(current_pid);
-	if (entry) {
-		printk(KERN_INFO "[uio-dummy] TODO: Updated permission %d for pid %d\n", permission, current_pid);
-	}
-	else {
-		entry = kmalloc(sizeof(*entry), GFP_KERNEL);
-		entry->pid = current_pid;
-		entry->permission = permission;
-		if (current_permission != permission) {
-			current_permission = permission;
-			free_all_pkeys();
-		}
-		else if (current_permission < 0) {
-			current_permission = permission;
-		}
-		list_add(&entry->list, &pkey_list);
+    if (vma->vm_flags & VM_WRITE) {
+        permission |= PROT_WRITE;
+    }
+    
+    entry = find_pkey(current_pid);
+    if (entry) {
+        printk(KERN_INFO "[uio-dummy] TODO: Updated permission %d for pid %d\n", permission, current_pid);
+    }
+    else {
+        entry = kmalloc(sizeof(*entry), GFP_KERNEL);
+        entry->pid = current_pid;
+        entry->permission = permission;
+        if (current_permission & permission) {
+            printk(KERN_INFO "[uio-dummy] Change permission %d -> %d\n", current_permission, permission);
+        current_permission = permission;
+        }
+        else if (current_permission != permission) {
+            current_permission = permission;
+            free_all_pkeys();
+        }
+        else if (current_permission < 0) {
+            current_permission = permission;
+        }
+        list_add(&entry->list, &pkey_list);
 
-		print_pkey();
-		printk(KERN_INFO "[uio-dummy] Added permission %d for pid %d\n", permission, current_pid);
-	}
-
-	printk(KERN_INFO "[uio-dummy] the memory is mmaped\n");
-	
-	return remap_pfn_range(vma, vma->vm_start, pfn, size, vma->vm_page_prot);
+        print_pkey();
+        printk(KERN_INFO "[uio-dummy] Added permission %d for pid %d\n", permission, current_pid);
+    }
+    printk(KERN_INFO "[uio-dummy] the memory is mmaped\n");
+    
+    return remap_pfn_range(vma, vma->vm_start, pfn, size, vma->vm_page_prot);
 }
 
 static void my_release(struct device *dev)
 {
-	printk(KERN_INFO "[uio-dummy] releasing my uio device\n");
+    printk(KERN_INFO "[uio-dummy] releasing my uio device\n");
 }
 
 static int uio_dummy_proc_show(struct seq_file *m, void *v)
 {
-	seq_printf(m, "UIO Dummy driver v%s\n", UIO_DUMMY_VERSION);
-	seq_printf(m, "    Allocated memory: %llu\n", mem_size);
+    seq_printf(m, "UIO Dummy driver v%s\n", UIO_DUMMY_VERSION);
+    seq_printf(m, "    Allocated memory: %llu\n", mem_size);
 
-	return 0;
+    return 0;
 }
 
 static int uio_dummy_proc_open(struct inode *inode, struct file *file)
 {
-	return single_open(file, uio_dummy_proc_show, NULL);
+    return single_open(file, uio_dummy_proc_show, NULL);
 }
 
 static ssize_t uio_dummy_proc_write(struct file *file, const char __user *ubuf,
-				    size_t count, loff_t *ppos)
+                    size_t count, loff_t *ppos)
 {
-	pid_t current_pid = task_pid_nr(current);
-	struct pkey_entry *entry;
-	char buf[16];
-	char *endptr;
-	unsigned long permission;
+    pid_t current_pid = task_pid_nr(current);
+    struct pkey_entry *entry;
+    char buf[16];
+    char *endptr;
+    unsigned long permission;
 
-	if (copy_from_user(buf, ubuf, count))
-		return -EFAULT;
-	
-	for (int i = 0; i < sizeof(buf); i++) {
-		if (buf[i] == '1') {
-			permission = 1;
-			break;
-		}
-		else if (buf[i] == '2') {
-			permission = 2;
-			break;
-		}
-		else if (buf[i] == '3') {
-			permission = 3;
-			break;
-		}
-	}
+    if (copy_from_user(buf, ubuf, count))
+        return -EFAULT;
+    
+    for (int i = 0; i < sizeof(buf); i++) {
+        if (buf[i] == '1') {
+            permission = 1;
+            break;
+        }
+        else if (buf[i] == '2') {
+            permission = 2;
+            break;
+        }
+        else if (buf[i] == '3') {
+            permission = 3;
+            break;
+        }
+    }
 
-	printk(KERN_INFO "[uio-dummy] Userspace requested permission %d\n", permission);
+    printk(KERN_INFO "[uio-dummy] Userspace requested permission %d\n", permission);
 
-	entry = find_pkey(current_pid);
-	if (!entry) {
-		free_pkey(current_pid);
-		printk(KERN_INFO "[uio-dummy] Permission is not allocated %d for pid %d\n", permission, current_pid);
-		return -EINVAL;
-	}
-	
-	if (entry->permission != permission || current_permission != permission) {
-		free_pkey(current_pid);
-		printk(KERN_INFO "[uio-dummy] Wrong permission %d for pid %d\n", permission, current_pid);
-		return -EINVAL;
-	}
-	
-	return count;
+    entry = find_pkey(current_pid);
+    if (!entry) {
+        free_pkey(current_pid);
+        printk(KERN_INFO "[uio-dummy] Permission is not allocated %d for pid %d\n", permission, current_pid);
+        return -EINVAL;
+    }
+    
+    if (entry->permission != permission || current_permission != permission) {
+        free_pkey(current_pid);
+        printk(KERN_INFO "[uio-dummy] Wrong permission %d for pid %d\n", permission, current_pid);
+        return -EINVAL;
+    }
+    
+    return count;
 }
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 6, 0)
 static struct file_operations uio_dummy_proc_operations = {
-	.owner = THIS_MODULE,
-	.open = uio_dummy_proc_open,
-	.read = seq_read,
-	.write = uio_dummy_proc_write,
-	.llseek = seq_lseek,
-	.release = single_release
+    .owner = THIS_MODULE,
+    .open = uio_dummy_proc_open,
+    .read = seq_read,
+    .write = uio_dummy_proc_write,
+    .llseek = seq_lseek,
+    .release = single_release
 };
 #else
 static struct proc_ops uio_dummy_proc_operations = {
-	.proc_open = uio_dummy_proc_open,
-	.proc_read = seq_read,
-	.proc_write = uio_dummy_proc_write,
-	.proc_lseek = seq_lseek,
-	.proc_release = single_release
+    .proc_open = uio_dummy_proc_open,
+    .proc_read = seq_read,
+    .proc_write = uio_dummy_proc_write,
+    .proc_lseek = seq_lseek,
+    .proc_release = single_release
 };
 #endif
 
 static int uio_dummy_irq_control(struct uio_info *dev_info, s32 irq_on)
 {
-	pid_t current_pid = task_pid_nr(current);
+    pid_t current_pid = task_pid_nr(current);
 
-	printk(KERN_INFO "[uio-dummy] Userspace requested IRQ generation %d\n", irq_on);
-	irqs_enabled = irq_on != 0;
+    printk(KERN_INFO "[uio-dummy] Userspace requested IRQ generation %d\n", irq_on);
+    irqs_enabled = irq_on != 0;
 
-	if (!(current_permission & PROT_WRITE)) {
-		printk(KERN_INFO "[uio-dummy] There is no write permission\n");
-		free_pkey(current_pid);
-	}
+    if (!(current_permission & PROT_WRITE)) {
+        printk(KERN_INFO "[uio-dummy] There is no write permission\n");
+        free_pkey(current_pid);
+    }
 
-	return 0;
+    return 0;
 }
 
 static int __init uio_dummy_init(void)
 {
-	struct uio_mem *mem;
-	dev = kzalloc(sizeof(struct device), GFP_KERNEL);
-	dev_set_name(dev, "uio_dummy_device");
-	dev->release = my_release;
-	if (device_register(dev) < 0) {
-		put_device(dev);
-		return -1;
-	}
+    struct uio_mem *mem;
+    dev = kzalloc(sizeof(struct device), GFP_KERNEL);
+    dev_set_name(dev, "uio_dummy_device");
+    dev->release = my_release;
+    if (device_register(dev) < 0) {
+        put_device(dev);
+        return -1;
+    }
 
-	info = kzalloc(sizeof(struct uio_info), GFP_KERNEL);
-	info->name = "uio_dummy_device";
-	info->version = UIO_DUMMY_VERSION;
+    info = kzalloc(sizeof(struct uio_info), GFP_KERNEL);
+    info->name = "uio_dummy_device";
+    info->version = UIO_DUMMY_VERSION;
 
-	// CUSTOM -> We do not have a hardware IRQ, but we generate
-	// IRQs towards the user otherwise, in this case by getting our proc
-	// file written to
-	info->irq = UIO_IRQ_CUSTOM;
-	info->irqcontrol = uio_dummy_irq_control;
-	info->mmap = uio_dummy_mmap;
+    // CUSTOM -> We do not have a hardware IRQ, but we generate
+    // IRQs towards the user otherwise, in this case by getting our proc
+    // file written to
+    info->irq = UIO_IRQ_CUSTOM;
+    info->irqcontrol = uio_dummy_irq_control;
+    info->mmap = uio_dummy_mmap;
 
-	// Make sure the physical memory is continuous (for PKU)
-	struct page *pages = alloc_pages(GFP_KERNEL, ORDER);
-	if (!pages) {
-		printk(KERN_INFO "[uio-dummy] alloc_pages error!\n");
-		return -1;
-	}
+    // Make sure the physical memory is continuous (for PKU)
+    struct page *pages = alloc_pages(GFP_KERNEL, ORDER);
+    if (!pages) {
+        printk(KERN_INFO "[uio-dummy] alloc_pages error!\n");
+        return -1;
+    }
 
-	// Just allocate a slab of virtual memory to be exposed through mmap
-	mem = &info->mem[0];
-	mem->memtype = UIO_MEM_VIRTUAL;
-	mem->addr = (phys_addr_t)vmalloc(mem_size);
-	mem->size = mem_size;
-	mem->name = "UIO dummy memory block";
-	printk(KERN_INFO "[uio-dummy] virtual memory address 0x%llx\n", (unsigned long long)mem->addr);
+    // Just allocate a slab of virtual memory to be exposed through mmap
+    mem = &info->mem[0];
+    mem->memtype = UIO_MEM_VIRTUAL;
+    mem->addr = (phys_addr_t)vmalloc(mem_size);
+    mem->size = mem_size;
+    mem->name = "UIO dummy memory block";
+    printk(KERN_INFO "[uio-dummy] virtual memory address 0x%llx\n", (unsigned long long)mem->addr);
 
-	if (uio_register_device(dev, info) < 0) {
-		vfree((const void *)mem->addr);
-		device_unregister(dev);
-		kfree(dev);
-		kfree(info);
-		printk(KERN_INFO "[uio-dummy] Failing to register uio device\n");
-		return -1;
-	}
-	printk(KERN_INFO "[uio-dummy] Allocating %llu bytes for mem0\n", mem_size);
+    if (uio_register_device(dev, info) < 0) {
+        vfree((const void *)mem->addr);
+        device_unregister(dev);
+        kfree(dev);
+        kfree(info);
+        printk(KERN_INFO "[uio-dummy] Failing to register uio device\n");
+        return -1;
+    }
+    printk(KERN_INFO "[uio-dummy] Allocating %llu bytes for mem0\n", mem_size);
 
-	proc_create_data("uio-dummy", 0666, NULL, &uio_dummy_proc_operations,
-			 dev);
-	return 0;
+    proc_create_data("uio-dummy", 0666, NULL, &uio_dummy_proc_operations, dev);
+    return 0;
 }
 
 static void __exit uio_dummy_exit(void)
 {
-	struct uio_mem *mem = &info->mem[0];
-	uio_unregister_device(info);
-	vfree((const void *)mem->addr);
-	device_unregister(dev);
-	remove_proc_entry("uio-dummy", NULL);
-	printk(KERN_INFO "[uio-dummy] Un-Registered UIO handler\n");
-	kfree(info);
-	kfree(dev);
+    struct uio_mem *mem = &info->mem[0];
+    uio_unregister_device(info);
+    vfree((const void *)mem->addr);
+    device_unregister(dev);
+    remove_proc_entry("uio-dummy", NULL);
+    printk(KERN_INFO "[uio-dummy] Un-Registered UIO handler\n");
+    kfree(info);
+    kfree(dev);
 }
 
 module_init(uio_dummy_init);
