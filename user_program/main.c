@@ -49,7 +49,7 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
-    /* Allocate one page of memory */
+    /* Allocate four page of memory */
     buf = mmap(NULL, length, permission, MAP_SHARED, fd, 0);
     if (buf == MAP_FAILED) {
         printf("[uio user] mmap failed!\n");
